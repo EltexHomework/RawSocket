@@ -13,5 +13,6 @@ make clean
 
 ## Демонстрация работы программ
 1) Написать UDP Sniffer, для тестирования использовать программу написанную в 16.1 (UDP клиент и сервер)   
+![task1](https://github.com/user-attachments/assets/d4fb7c42-bfb6-480f-a3c5-68052a9c852a)
 
 
