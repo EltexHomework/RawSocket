@@ -91,6 +91,10 @@ char* recv_message(struct server* server, struct sockaddr_in* client) {
   
   /* Receive message */
   bytes_read = recvfrom(server->sfd, buffer, BUFFER_SIZE, 0, (struct sockaddr*) client, &client_len);  
+
+  /* Truncate buffer */
+  buffer[bytes_read] = '\0';
+
   if (bytes_read == -1)
     print_error("recvfrom");
   else if (bytes_read == 0)

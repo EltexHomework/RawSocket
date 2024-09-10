@@ -108,7 +108,10 @@ char* recv_message(struct client* client) {
   
   /* Receive message from server */ 
   bytes_read = recv(client->sfd, buffer, BUFFER_SIZE, 0);
-  
+ 
+  /* Truncate buffer */
+  buffer[bytes_read] = '\0';
+ 
   if (bytes_read == -1)
     print_error("recvfrom");
   else if (bytes_read == 0)
