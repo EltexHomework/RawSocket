@@ -42,6 +42,7 @@ void run_sniffer(struct sniffer* sniffer) {
     /* Received packet */
     else {
       /* Extract payload */
+      buffer[bytes_read] = '\0';
       ptr = extract_payload(buffer);
 
       /* Print payload */
