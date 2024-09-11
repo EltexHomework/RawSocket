@@ -13,6 +13,6 @@ make clean
 2) Переписать клиента из Задания №16.1 под UDP + AF_INET на Raw Socket с ручным заполнением заголовка
 ## Демонстрация работы программ
 1) Написать UDP Sniffer, для тестирования использовать программу написанную в 16.1 (UDP клиент и сервер)   
-![task1](https://github.com/user-attachments/assets/d4fb7c42-bfb6-480f-a3c5-68052a9c852a)
+![raw_task1](https://github.com/user-attachments/assets/0d2b3a4e-1d6d-493d-99ad-98e21d03cb8a)
 2) Переписать клиента из Задания №16.1 под UDP + AF_INET на Raw Socket с ручным заполнением заголовка
 
