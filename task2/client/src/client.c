@@ -1,4 +1,5 @@
 #include "../headers/client.h"
+#include <netinet/in.h>
 #include <netinet/udp.h>
 #include <string.h>
 
@@ -48,7 +49,6 @@ void run_client(struct client* client) {
  */
 void process_input(struct client* client) {
   char buffer[BUFFER_SIZE];
-  char response[BUFFER_SIZE];
 
   /* Wait for user input */
   while (1) {
@@ -62,24 +62,26 @@ void process_input(struct client* client) {
     /* Send user message */
     send_message(client, buffer);
     
-    snprintf(response, BUFFER_SIZE, "Server %s", buffer); 
-
     /* Receive answer */
-    while (1) {
-      char* message = recv_response(client);
-      if (message == NULL) {
-        close_connection(client);
-        break;
-      }
-      if (strcmp(response, message) == 0) {
-        printf("SERVER: Server %s:%d send response: %s\n", 
-               inet_ntoa(client->serv.sin_addr), 
-               SERVER_PORT, 
-               message);
-        break;
-      }
-      free(message);
+    char* message = recv_response(client);
+      
+    if (message == NULL) {
+      close_connection(client);
+      break;
     }
+    
+    /* Extract payload */
+    char* payload = extract_payload(message);
+
+    /* Log response */
+    printf("CLIENT: Received response from %s:%d : %s\n",
+           inet_ntoa(client->serv.sin_addr),
+           ntohs(client->serv.sin_port),
+           payload);
+    
+    /* Free allocated memory */
+    free(message);
+    free(payload);
   }
 }
 
@@ -126,27 +128,38 @@ void send_message(struct client* client, char message[BUFFER_SIZE]) {
  * Return: string (message) if successful, NULL if connection terminated
  */
 char* recv_response(struct client* client) {
+     
   ssize_t bytes_read;
+  socklen_t serv_len;
+  struct sockaddr_in addr; 
   char* buffer = (char*) malloc(BUFFER_SIZE * sizeof(char));
-  socklen_t serv_len = sizeof(client->serv);
-  char* payload;
+   
+  serv_len = sizeof(addr);
   
-  /* Receive message from server */ 
-  bytes_read = recvfrom(client->sfd, buffer, BUFFER_SIZE, 0, 
-                        (struct sockaddr*) &client->serv, &serv_len);
-  
-  if (bytes_read == -1)
-    print_error("recvfrom");
-  else if (bytes_read == 0)
-    return NULL;
+  while (1) {
+    /* Receive message from server */ 
+    bytes_read = recvfrom(client->sfd, buffer, BUFFER_SIZE, 0, 
+                          (struct sockaddr*) &addr, &serv_len);
+
+    if (bytes_read == -1)
+      print_error("recvfrom");
+    else if (bytes_read == 0)
+      return NULL;
+    
+    struct iphdr* ip = (struct iphdr*) buffer;
+    struct udphdr* udp = (struct udphdr*) (buffer + ip->ihl * 4);
+
+    /* Message from server */
+    if (ip->saddr == client->serv.sin_addr.s_addr &&
+    udp->source == client->serv.sin_port) {
+      break;
+    }
+  }
   
   /* Truncate buffer */
   buffer[bytes_read] = '\0';
 
-  /* Extract payload */
-  payload = extract_payload(buffer);
-  
-  return payload;
+  return buffer;
 }
 
 /*
@@ -169,7 +182,7 @@ char* extract_payload(char* buffer) {
 
   /* Calculate IP header length */
   iphdr_length = ip->ihl * 4;
-
+  
   /* Get payload */
   ptr = buffer + iphdr_length + sizeof(struct udphdr);
    
