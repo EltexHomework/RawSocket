@@ -17,5 +17,7 @@ make clean
 ![raw_task1](https://github.com/user-attachments/assets/0d2b3a4e-1d6d-493d-99ad-98e21d03cb8a)
 
 2) Переписать клиента из Задания №16.1 под UDP + AF_INET на Raw Socket с ручным заполнением заголовка
+![task2](https://github.com/user-attachments/assets/32ea0c6f-6d8f-493b-9ff2-d43cffa46391)
 
 3) Переписать клиента из Задания №2 под ручное заполнение IP заголовка
+![task3](https://github.com/user-attachments/assets/7e3b079f-ddfe-498f-b9f3-5c86e550803b)
