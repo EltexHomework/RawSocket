@@ -24,4 +24,5 @@ make clean
 ![task3](https://github.com/user-attachments/assets/7e3b079f-ddfe-498f-b9f3-5c86e550803b)
 
 4) Переписать клиента из Задание №3 под ручное заполнение Ethernet заголовка
+![task4](https://github.com/user-attachments/assets/d5cc9c09-6899-4be7-b5fc-d8dc898aab35)
 
