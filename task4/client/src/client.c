@@ -58,7 +58,6 @@ void process_input(struct client* client) {
   /* Wait for user input */
   while (1) {
     char* message;
-    char* payload;
 
     printf("Enter message: ");
     
@@ -82,18 +81,14 @@ void process_input(struct client* client) {
       break;
     }
     
-    /* Extract payload */
-    payload = extract_payload(message);
-
     /* Log response */
     printf("CLIENT: Received response from %s:%d : %s\n",
            client->serv_ip,
            client->serv_port,
-           payload);
+           message);
 
     /* Free allocated memory */
     free(message);
-    free(payload);
   }
 }
 
@@ -106,7 +101,8 @@ void send_message(struct client* client, char message[BUFFER_SIZE]) {
   ssize_t bytes_send;
   uint8_t shost[MAC_SIZE] = CLIENT_MAC;  
   uint8_t dhost[MAC_SIZE] = SERVER_MAC;
-  int length = sizeof(struct iphdr) + sizeof(struct udphdr) + strlen(message);
+  int length = sizeof(struct iphdr) + sizeof(struct udphdr) + 
+    sizeof(struct ether_header) + strlen(message);
   char buffer[length];
   struct iphdr ip;
   struct udphdr udp; 
@@ -117,21 +113,21 @@ void send_message(struct client* client, char message[BUFFER_SIZE]) {
   init_udphdr(&udp, sizeof(struct udphdr) + strlen(message), client->serv_port); 
   init_etherhdr(&ether, shost, dhost); 
 
+  /* Copy Ethernet header to buffer */
+  memcpy(buffer, 
+         &ether, 
+         sizeof(struct ether_header));
+
   /* Copy IP header to buffer */
-  memcpy(buffer, &ip, sizeof(struct iphdr));
+  memcpy(buffer + sizeof(struct ether_header), &ip, sizeof(struct iphdr));
 
   /* Copy UDP header to buffer */
-  memcpy(buffer + sizeof(struct iphdr), 
+  memcpy(buffer + sizeof(struct ether_header) + sizeof(struct iphdr), 
          &udp, 
          sizeof(struct udphdr));
 
-  /* Copy Ethernet header to buffer */
-  memcpy(buffer + sizeof(struct iphdr) + sizeof(struct udphdr), 
-         &ether, 
-         sizeof(struct ether_header));
-  
   /* Copy payload to message */
-  memcpy(buffer + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct ether_header),
+  memcpy(buffer + sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct udphdr),
          message,
          strlen(message));
 
@@ -146,8 +142,10 @@ void send_message(struct client* client, char message[BUFFER_SIZE]) {
 
 /*
  * init_iphdr - used to initialize IP header with serv addr.
- * @client - pointer to an object of client struct
  * @ip - pointer to an object of iphdr struct
+ * @message - buffer containing message
+ * @client_ip - IP address of the client
+ * @server_ip - IP address of the server
  */
 void init_iphdr(struct iphdr* ip, char message[BUFFER_SIZE], 
                 const char* client_ip, const char* server_ip) {
@@ -155,23 +153,23 @@ void init_iphdr(struct iphdr* ip, char message[BUFFER_SIZE],
   ip->version = 4;
   ip->ttl = 255;
   ip->id = 2;
-  ip->check = 0;
-  ip->check = checksum(message);
   ip->saddr = inet_addr(client_ip);
   ip->tos = 0;
   ip->frag_off = 0;
   ip->ihl = 5;
-  ip->tot_len =  ip->ihl * 4 + strlen(message);
+  ip->tot_len =  htons(ip->ihl * 4 + sizeof(struct udphdr) + strlen(message));
   ip->daddr = inet_addr(server_ip);
   ip->protocol = IPPROTO_UDP;
+  ip->check = 0;
+  ip->check = checksum((uint16_t *) ip, ip->ihl * 4);
 }
 
 /*
  * init_udphdr - used to initialize UDP header with
  * source port, dest port, check and length.
- * @client - pointer to an object of client struct
  * @udp - pointer to an object of udphdr struct
  * @length - length of UDP header 
+ * @server_port - port of the server
  */
 void init_udphdr(struct udphdr* udp, ssize_t length, int server_port) {
   /* Initialize UDP header */
@@ -181,9 +179,16 @@ void init_udphdr(struct udphdr* udp, ssize_t length, int server_port) {
   udp->len = htons(length);
 }
 
+/*
+ * init_etherhdr - used to initialize Ethernet header
+ * with source and destionation MACs and ether_type.
+ * @ether - pointer to object of ether_header struct
+ * @shost - MAC of source host
+ * @dhost - MAC of destination host
+ */
 void init_etherhdr(struct ether_header* ether, uint8_t shost[MAC_SIZE], 
                    uint8_t dhost[MAC_SIZE]) {
-  ether->ether_type = 4;
+  ether->ether_type = htons(ETHERTYPE_IP);
   memcpy(ether->ether_shost, shost, MAC_SIZE);
   memcpy(ether->ether_dhost, dhost, MAC_SIZE);
 }
@@ -197,14 +202,15 @@ char* recv_response(struct client* client) {
      
   ssize_t bytes_read;
   socklen_t serv_len;
-  struct sockaddr_in addr; 
+  struct sockaddr_ll addr; 
+  char* packet = (char*) malloc(BUFFER_SIZE * sizeof(char));
   char* buffer = (char*) malloc(BUFFER_SIZE * sizeof(char));
-   
+
   serv_len = sizeof(addr);
   
   while (1) {
     /* Receive message from server */ 
-    bytes_read = recvfrom(client->sfd, buffer, BUFFER_SIZE, 0, 
+    bytes_read = recvfrom(client->sfd, packet, BUFFER_SIZE, 0, 
                           (struct sockaddr*) &addr, &serv_len);
 
     if (bytes_read == -1)
@@ -213,82 +219,54 @@ char* recv_response(struct client* client) {
       return NULL;
     
     /* Extract headers */
-    struct iphdr* ip = (struct iphdr*) buffer;
-    struct udphdr* udp = (struct udphdr*) (buffer + ip->ihl * 4);
+    struct ethhdr* ether = (struct ethhdr*) packet; 
+    struct iphdr* ip = (struct iphdr*) (packet + sizeof(struct ethhdr));
+    struct udphdr* udp = (struct udphdr*) (packet + sizeof(struct ethhdr) + ip->ihl * 4);
 
     /* Message from server */
     if (ip->saddr == inet_addr(client->serv_ip) &&
     udp->source == htons(client->serv_port)) {
+      /* Extract payload */
+      strncpy(buffer, 
+              packet + sizeof(struct ethhdr) + ip->ihl * 4 
+              + sizeof(struct udphdr),
+              BUFFER_SIZE);
       break;
     }
   }
   
   /* Truncate buffer */
-  buffer[bytes_read] = '\0';
-
+  packet[bytes_read] = '\0';
+  free(packet);
   return buffer;
 }
 
 /*
- * extract_payload - used to extract payload
- * from UDP packet. Skips IP header and UDP header
- * by calculation their length. Allocates memory
- * for payload (must be free manually).
- * @buffer - pointer to UDP packet
- *
- * Return: pointer to buffer with payload
- */
-char* extract_payload(char* buffer) {
-  int iphdr_length, size;
-  char* ptr;
-  char* payload = (char*) malloc(BUFFER_SIZE * sizeof(char));
-  struct iphdr* ip;
-  
-  /* Extract IP header */
-  ip = (struct iphdr*) buffer;
-
-  /* Calculate IP header length */
-  iphdr_length = ip->ihl * 4;
-  
-  /* Get payload */
-  ptr = buffer + iphdr_length + sizeof(struct udphdr);
-   
-  /* Copy payload */
-  strncpy(payload, ptr, strlen(ptr));
-
-  return payload;  
-}
-
-/*
- * checksum - used to calculate checksum of buffer.
- * @buffer - buffer with max size of BUFFER_SIZE
+ * checksum - used to calculate checksum of IP header.
+ * @buffer - IP header 
+ * @len - length of the IP header
  *
  * Return: int value representing checksum  
  */
-int checksum(char buffer[BUFFER_SIZE]) {
-  int csum = 0;
-  int remainder = 0;
-  short* ptr;
-  
-  /* Take first 2 bytes from buffer */
-  ptr = (short *) buffer;
-  
-  /* Iterate throught buffer by 2 bytes */
-  for (int i = 0; i < 10; i++) {
-    csum = csum + *ptr;
-    ptr++;
+int checksum(uint16_t* buffer, int len) {
+  unsigned long csum = 0;
+
+  /* Sum 16-bit words */
+  while (len > 1) {
+    csum += *buffer++;
+    len -= 2;
   }
-  
-  /* Get remainder */
-  remainder = csum >> 16;
 
-  /* Add remainder */
-  csum = (csum & 0xFFFF) + remainder;
+  /* Check for leftover byte */
+  if (len == 1) {
+    csum += *(uint8_t*) buffer;
+  }
 
-  /* Inverse checksum*/
-  csum = ~csum;
+  /* Fold sum to 16 bits and add overflow */
+  csum = (csum >> 16) + (csum & 0xFFFF);
+  csum += (csum >> 16);
 
-  return csum;
+  return ~csum;
 }
 
 /*

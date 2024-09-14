@@ -23,7 +23,8 @@ struct client {
   int sfd;
 };
 
-struct client* create_client(const char* ip, const int port, const char mac[MAC_SIZE], const char* client_ip);
+struct client* create_client(const char* ip, const int port, 
+    const char mac[MAC_SIZE], const char* client_ip);
 
 void run_client(struct client* client);
 
@@ -41,9 +42,7 @@ void init_udphdr(struct udphdr* udp, ssize_t length, int server_port);
 void init_etherhdr(struct ether_header* ether, uint8_t shost[MAC_SIZE], 
                    uint8_t dhost[MAC_SIZE]);
 
-char* extract_payload(char* buffer);
-
-int checksum(char buffer[BUFFER_SIZE]);
+int checksum(uint16_t* buffer, int len);
 
 void close_connection(struct client* client);
 

@@ -38,7 +38,7 @@ $(BIN_DIR):
 
 # Link object files to create the client executable
 $(CLIENT_TARGET): $(COMMON_OBJECTS) $(CLIENT_OBJECTS)
-	$(CC) $(COMMON_OBJECTS) $(CLIENT_OBJECTS) $(LDFLAGS) -lncurses -o $@
+	$(CC) $(COMMON_OBJECTS) $(CLIENT_OBJECTS) $(LDFLAGS) -o $@
 
 # Link object files to create the server executable
 $(SERVER_TARGET): $(COMMON_OBJECTS) $(SERVER_OBJECTS)

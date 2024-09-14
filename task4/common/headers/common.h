@@ -25,7 +25,7 @@
 #define SERVER_PORT 8080
 #define CLIENT_PORT 7777
 #define PROTO_VERSION 4
-#define IFNAME "enp0s3"
+#define IFNAME "enp24s0"
 #define print_error(msg) do {perror(msg); \
   exit(EXIT_FAILURE);} while(0)
 
